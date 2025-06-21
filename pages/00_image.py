@@ -1,2 +1,2 @@
 import streamlot as st
-st.images("https://giphy.com/gifs/scgallery-friends-family-sweetcharee-7NON3hH96H4InrrkPy")
+st.images("https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExeWcybjV1d3J3cWd0Ymdudzd1cHVrdjhzODZienZqamNkZzRoeW5jYyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/7NON3hH96H4InrrkPy/giphy.gif")
