@@ -1,63 +1,125 @@
 import streamlit as st
+
 import yfinance as yf
-import plotly.graph_objects as go
 
-st.set_page_config(page_title="Global Market Cap Top 10", layout="wide")
+import pandas as pd
 
-st.title("🌍 글로벌 시가총액 Top 10 기업 📈")
+import plotly.graph_objs as go
 
-# 미리 선정한 글로벌 시가총액 상위 10개 기업의 티커 (2024 기준)
-tickers = {
-    "Apple": "AAPL",
-    "Microsoft": "MSFT",
-    "Saudi Aramco": "2222.SR",  # 사우디 증시
-    "Alphabet (Google)": "GOOGL",
-    "Amazon": "AMZN",
-    "Nvidia": "NVDA",
-    "Meta": "META",
-    "Berkshire Hathaway": "BRK-B",
-    "TSMC": "TSM",
-    "Eli Lilly": "LLY"
+from datetime import datetime, timedelta
+
+st.title("글로벌 시가총액 TOP10 기업의 최근 1년간 주가 변화")
+
+top10 = {
+
+    'AAPL': 'Apple',
+
+    'MSFT': 'Microsoft',
+
+    'GOOGL': 'Alphabet (Google)',
+
+    'AMZN': 'Amazon',
+
+    'NVDA': 'Nvidia',
+
+    'META': 'Meta Platforms',
+
+    'BRK-B': 'Berkshire Hathaway',
+
+    'TSLA': 'Tesla',
+
+    'LLY': 'Eli Lilly',
+
+    'TSM': 'TSMC'
+
 }
 
-market_caps = {}
-currency = {}
+st.write("조회 기업:")
 
-# 데이터 수집
-for name, ticker in tickers.items():
-    try:
-        stock = yf.Ticker(ticker)
-        info = stock.info
-        market_cap = info.get("marketCap", None)
-        cur = info.get("financialCurrency", "USD")
-        if market_cap:
-            market_caps[name] = market_cap
-            currency[name] = cur
-    except Exception as e:
-        st.warning(f"{name} 데이터 로딩 실패: {e}")
+st.write(", ".join([f"{v}({k})" for k, v in top10.items()]))
 
-# 정렬
-sorted_data = sorted(market_caps.items(), key=lambda x: x[1], reverse=True)
+end = datetime.today()
 
-# 시각화용 데이터
-names = [item[0] for item in sorted_data]
-caps = [item[1] / 1e12 for item in sorted_data]  # 단위: 조(Trillion USD)
+start = end - timedelta(days=365)
 
-fig = go.Figure(data=[
-    go.Bar(
-        x=names,
-        y=caps,
-        text=[f"${cap:.2f}T" for cap in caps],
-        textposition='auto',
-        marker_color='indianred'
-    )
-])
+with st.spinner("데이터를 가져오고 있습니다..."):
+
+    data = yf.download(list(top10.keys()), start=start, end=end, group_by='ticker', auto_adjust=True)
+
+# 데이터 구조 자동 감지
+
+if isinstance(data.columns, pd.MultiIndex):
+
+    # 야후파이낸스 종목 여러 개 → MultiIndex
+
+    # 구조 확인: 보통 ('AAPL', 'Adj Close'), ...
+
+    # level 0: 티커, level 1: 속성
+
+    if "Adj Close" in data.columns.get_level_values(1):
+
+        # 각 티커별 "Adj Close"만 추출
+
+        adj_close = pd.DataFrame({ticker: data[ticker]['Adj Close'] for ticker in top10 if ticker in data.columns.get_level_values(0)})
+
+    elif "Close" in data.columns.get_level_values(1):
+
+        adj_close = pd.DataFrame({ticker: data[ticker]['Close'] for ticker in top10 if ticker in data.columns.get_level_values(0)})
+
+    else:
+
+        st.error("데이터에서 'Adj Close' 또는 'Close' 값을 찾을 수 없습니다.")
+
+        st.write(data.head())
+
+        st.stop()
+
+else:
+
+    # 단일 컬럼 (종목 1개 등) 혹은 Wide-Format
+
+    if "Adj Close" in data.columns:
+
+        adj_close = data["Adj Close"].to_frame()
+
+    elif "Close" in data.columns:
+
+        adj_close = data["Close"].to_frame()
+
+    else:
+
+        st.error("데이터에서 'Adj Close' 또는 'Close' 값을 찾을 수 없습니다.")
+
+        st.write(data.head())
+
+        st.stop()
+
+adj_close = adj_close.fillna(method="ffill")
+
+fig = go.Figure()
+
+for ticker, name in top10.items():
+
+    if ticker in adj_close.columns:
+
+        fig.add_trace(go.Scatter(
+
+            x=adj_close.index, y=adj_close[ticker], mode='lines', name=name
+
+        ))
 
 fig.update_layout(
-    title="🌐 글로벌 시가총액 Top 10 기업 (단위: Trillion USD)",
-    xaxis_title="기업명",
-    yaxis_title="시가총액 (Trillion USD)",
-    template="plotly_white"
+
+    title='글로벌 시가총액 TOP10 기업 주가 변화 (최근 1년)',
+
+    xaxis_title='날짜',
+
+    yaxis_title='종가(USD)',
+
+    legend_title='기업명',
+
+    height=600
+
 )
 
 st.plotly_chart(fig, use_container_width=True)
